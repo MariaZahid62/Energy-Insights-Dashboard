@@ -1,0 +1,9 @@
+Timeframe: month,Rate (PKR/kWh): 43.8,Exported: 8/15/2025, 4:09:04 PM
+Name,Category,Power (W),Hours/Day,Qty
+Air Conditioner,Cooling,2000,6,1
+Fridge,Kitchen,150,24,1
+LED Bulb,Lighting,10,6,8
+TV,Entertainment,100,4,1
+Laptop,Computing,65,8,1
+Ceiling Fan,Cooling,75,10,3
+Microwave Oven,Kitchen,1200,0.5,1
