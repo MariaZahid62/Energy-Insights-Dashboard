@@ -1,0 +1,8 @@
+Name,Category,Power (W),Hours/Day,Qty
+Air Conditioner,Cooling,2000,6.0,1
+Fridge,Kitchen,150,24.0,1
+LED Bulb,Lighting,10,6.0,8
+TV,Entertainment,100,4.0,1
+Laptop,Computing,65,8.0,1
+Ceiling Fan,Cooling,75,10.0,3
+Microwave Oven,Kitchen,1200,0.5,1
