@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title> Energy Insights Dashboard </title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- jsPDF + autoTable -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    /* ===== THEME (cyan accents, elegant rounded cards) ===== */
+    :root {
+      --bg: #1a1a1a;    /* Very dark grey */
+      --card: #222222;  /* Slightly lighter for cards */
+      --text: #f0f0f0;  /* Keep text bright */
+      --muted: #8b949e;
+  --accent: #7FB8A4;      /* Soft teal-green for buttons */
+  --accent-2: #B49FCC;    /* Muted lavender */
+  --accent-3: #F2C76E;    /* Warm gold */
+  --accent-4: #E09F84;    /* Peachy terracotta */
+      --danger: #ef4444;
+      --shadow: 0 10px 30px rgba(0,0,0,.25);
+      --radius: 16px;
+      --border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+    }
+    [data-theme="light"] {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #5b6b8c;
+       --accent: #7FB8A4;      /* Soft teal-green for buttons */
+  --accent-2: #B49FCC;    /* Muted lavender */
+  --accent-3: #F2C76E;    /* Warm gold */
+  --accent-4: #E09F84;    /* Peachy terracotta */
+      --danger: #dc2626;
+      --shadow: 0 8px 24px rgba(2,12,27,.08);
+      --border: 1px solid rgba(2,12,27,.08);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:var(--bg); color:var(--text);
+      font:14px/1.5 system-ui, Segoe UI, Inter, Roboto, Arial;
+    }
+
+    header{
+      position:sticky; top:0; z-index:10;
+      backdrop-filter:saturate(1.2) blur(8px);
+      background: color-mix(in oklab, var(--bg) 82%, transparent);
+      border-bottom: var(--border);
+    }
+    .container{max-width:1200px; margin:0 auto; padding:16px}
+    .header-row{display:flex; align-items:center; justify-content:space-between; gap:12px}
+    h1{margin:8px 0; font-size: clamp(20px, 3vw, 28px)}
+
+    .grid{display:grid; grid-template-columns: 320px 1fr; gap:16px; margin-top:16px}
+    @media (max-width: 1000px){ .grid{ grid-template-columns:1fr } }
+
+    .card{background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:14px; border: var(--border)}
+    .card h2{font-size:16px; margin:0 0 8px; color:var(--muted); letter-spacing:.3px}
+
+    /* Controls (left) */
+    .controls{display:grid; gap:12px}
+    .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+    label{font-size:12px; color:var(--muted)}
+    input[type="text"], input[type="number"], select{
+      width:100%; background: transparent; border: var(--border);
+      color:var(--text); padding:10px 12px; border-radius: 10px; outline:none;
+    }
+    input[type="file"]{width:100%}
+
+    .btn{
+      appearance:none; border:0; padding:10px 14px; border-radius: 12px;
+      background: var(--accent); color:white; cursor:pointer; font-weight:600; box-shadow: var(--shadow);
+    }
+
+/* Make ghost buttons visible in light mode */
+[data-theme="light"] .btn.ghost {
+  color: var(--accent); /* bright blue text for visibility */
+  border-color: var(--accent); /* optional: makes border match */
+}
+    .btn.secondary{ background: color-mix(in oklab, var(--accent) 18%, var(--card)); color: var(--text) }
+    .btn.ghost{ background: transparent; border: var(--border) }
+    .btn.warn{ background: var(--danger) }
+
+    .divider{height:1px; background: color-mix(in oklab, var(--text) 10%, transparent); margin:10px 0}
+    .footnote{ color:var(--muted); font-size:12px }
+
+    /* Top insight cards */
+    .summary{ display:grid; grid-template-columns: repeat(3, 1fr); gap:12px }
+    @media (max-width: 900px){ .summary{ grid-template-columns: 1fr } }
+    .stat{ background: var(--card); border: var(--border); padding:14px; border-radius:14px }
+    .stat .label{ font-size:12px; color:var(--muted) }
+    .stat .value{ font-size: 22px; font-weight:700 }
+
+    /* Table */
+    table{ width:100%; border-collapse: collapse }
+    th, td{ border-bottom: 1px solid color-mix(in oklab, var(--text) 10%, transparent); padding: 8px; text-align:left }
+    th{ color: var(--muted); font-weight:600; font-size:12px }
+    tbody tr:hover{ background: color-mix(in oklab, var(--accent) 8%, transparent) }
+
+    /* Timeframe segmented control */
+    .tf-wrap{display:flex; gap:8px; flex-wrap:wrap}
+    .tf-btn{
+      flex:1; min-width:110px; text-align:center; padding:8px 10px; border-radius:999px;
+      border: var(--border); background: transparent; color: var(--text); cursor: pointer; font-weight:600;
+    }
+    .tf-btn.active{ background: var(--accent); color:white; border-color: var(--accent) }
+    .helper-text{ font-size: 11px; color: var(--muted) }
+
+    /* Charts side by side */
+    .charts{ display:grid; grid-template-columns: 1fr 1fr; gap:12px }
+    @media (max-width: 900px){ .charts{ grid-template-columns: 1fr } }
+    .chart-card canvas{ width:100%; height: 260px } /* smaller as requested */
+
+    /* Tags */
+    .tag{ padding:2px 8px; border-radius:999px; font-size:11px; border:var(--border) }
+
+    /* color family for categories */
+    .cooling       { background: #7FB8A4; color: #000; }
+.lighting      { background: #F2C76E; color: #000; }
+.entertainment { background: #B49FCC; color: #000; }
+.kitchen       { background: #E09F84; color: #000; }
+.heating       { background: #F4A6A0; color: #000; }
+.computing     { background: #8FB4D9; color: #000; }
+.other         { background: #B8B8B8; color: #000; }
+  </style>
+</head>
+<body data-theme="dark">
+  <header>
+    <div class="container header-row">
+ <div style="display: flex; flex-direction: column;">
+      <h1>Energy Insights Dashboard</h1>
+      <p style="font-size: 1rem; font-weight: 400; color: #666; margin-top: 0.3rem; line-height: 1.4;">
+        A real-time energy monitoring and analytics platform designed to optimize consumption and improve efficiency.
+      </p>
+    </div>
+  <div class="row">
+        <select id="themeSelect" title="Theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+        <button class="btn ghost" id="resetAll">Reset</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Top insight cards -->
+    <section class="summary" id="topCards">
+      <div class="stat">
+        <div class="label">Total Energy</div>
+        <div class="value"><span id="sumKwh">0.00</span> kWh/<span id="tfLabel">month</span></div>
+      </div>
+      <div class="stat">
+        <div class="label">Estimated Cost</div>
+        <div class="value"><span id="sumCost">0.00</span> PKR/<span class="tf">month</span></div>
+      </div>
+      <div class="stat">
+        <div class="label">Top Consumer</div>
+        <div class="value" id="topConsumer">—</div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <div class="grid">
+      <!-- Sidebar: Controls -->
+      <aside class="card controls">
+        <h2>Add Appliance</h2>
+        <div class="row">
+          <input id="inpName" type="text" placeholder="Appliance name (e.g., Air Conditioner)" />
+        </div>
+        <div class="row">
+          <input id="inpWatt" type="number" placeholder="Power (W)" step="1" />
+          <input id="inpHours" type="number" placeholder="Hours/day" step="0.1" />
+        </div>
+        <div class="row">
+          <input id="inpQty" type="number" placeholder="Qty" step="1" />
+          <select id="categorySelect" title="Category">
+            <option>Cooling</option>
+            <option>Lighting</option>
+            <option>Entertainment</option>
+            <option>Kitchen</option>
+            <option>Heating</option>
+            <option>Computing</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="row">
+          <button class="btn" id="btnAdd">+ Add Appliance</button>
+        </div>
+
+        <div class="divider"></div>
+        <h2>Timeframe</h2>
+        <div class="tf-wrap" id="tfButtons">
+          <button class="tf-btn active" data-tf="day">📅 Per Day</button>
+          <button class="tf-btn" data-tf="week">📆 Per Week</button>
+          <button class="tf-btn" data-tf="month">🗓 Per Month</button>
+          <button class="tf-btn" data-tf="year">📊 Per Year</button>
+        </div>
+        <p class="helper-text">All totals and estimates reflect the selected timeframe.</p>
+
+        <div class="divider"></div>
+        <h2>Import / Export</h2>
+        <div class="row">
+          <input id="csvFile" type="file" accept=".csv" />
+        </div>
+        <div class="row">
+          <button class="btn secondary" id="btnImportOverwrite">Import (Overwrite)</button>
+          <button class="btn secondary" id="btnImportAppend">Import (Append)</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="btnExportCSV">Export CSV</button>
+          <button class="btn" id="btnExportPDF">Export PDF</button>
+        </div>
+        <p class="footnote">Data is stored locally (LocalStorage). Cost rate is fixed at 43.8 PKR/kWh.</p>
+      </aside>
+
+      <!-- Main: Dashboard -->
+      <section class="card">
+        <details open>
+          <summary>Charts</summary>
+          <div class="row" style="gap:8px; margin-bottom:8px">
+            <select id="chartType" title="Chart Type">
+              <option value="pie">Pie</option>
+              <option value="bar">Bar</option>
+              <option value="stacked">Stacked Bar (by Category)</option>
+            </select>
+          </div>
+          <div class="charts">
+            <div class="chart-card card">
+              <h2 style="margin-bottom:8px">Main Chart</h2>
+              <canvas id="mainChart" height="220"></canvas>
+            </div>
+            <div class="chart-card card">
+              <h2 style="margin-bottom:8px">Category Share</h2>
+              <canvas id="pieChart" height="220"></canvas>
+            </div>
+          </div>
+        </details>
+
+        <div class="divider"></div>
+
+        <details open>
+          <summary>Appliances</summary>
+          <div class="table-wrap">
+            <table id="tbl">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Power (W)</th>
+                  <th>Hours/Day</th>
+                  <th>Qty</th>
+                  <th>Daily kWh</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+        </details>
+
+        <div class="divider"></div>
+
+        <details open>
+          <summary>Insights</summary>
+          <div id="insights"></div>
+        </details>
+      </section>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Bottom insights breakdown -->
+    <section class="card" id="insightsBottom"></section>
+  </main>
+
+  <script>
+    // ===== Constants & Palette =====
+    const COST_RATE = 43.8; // PKR per kWh
+    const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]; // for history logging if needed
+    const CATEGORY_COLORS = {
+  Cooling:       "#7FB8A4", // soft teal-green
+  Lighting:      "#F2C76E", // warm muted gold
+  Entertainment: "#B49FCC", // soft purple-lavender
+  Kitchen:       "#E09F84", // peachy terracotta
+  Heating:       "#F4A6A0", // gentle coral-pink
+  Computing:     "#8FB4D9", // soft blue
+  Other:         "#B8B8B8"  // neutral grey
+};
+
+
+    // ===== State =====
+    const state = {
+      items: [],             // {id, name, category, watts, hoursPerDay, qty}
+      timeframe: 'month',    // default to month for the top cards vibe (labels adapt anyway)
+      history: [],           // [{date:'YYYY-MM-DD', kwh: number}]
+      theme: 'dark'
+    };
+    const LS_KEY = 'energy_tracker_cyan_v2';
+
+    function uid(){ return Math.random().toString(36).slice(2,9); }
+    function save(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+    function load(){
+      const raw = localStorage.getItem(LS_KEY);
+      if(!raw){
+        // smart first-visit demo
+        state.items = [
+          { id: uid(), name:'Air Conditioner', category:'Cooling', watts:2000, hoursPerDay:6, qty:1 },
+          { id: uid(), name:'Fridge',          category:'Kitchen', watts:150,  hoursPerDay:24, qty:1 },
+          { id: uid(), name:'LED Bulb',        category:'Lighting', watts:10,  hoursPerDay:6,  qty:8 },
+          { id: uid(), name:'TV',              category:'Entertainment', watts:100, hoursPerDay:4, qty:1 },
+          { id: uid(), name:'Laptop',          category:'Computing', watts:65, hoursPerDay:8, qty:1 },
+        ];
+        state.timeframe = 'month';
+        state.theme = document.body.getAttribute('data-theme') || 'dark';
+        save();
+        return;
+      }
+      try{ Object.assign(state, JSON.parse(raw)); }catch(e){ console.warn('Failed to load state', e); }
+    }
+
+    // ===== Timeframe helpers =====
+    function timeframeFactor(tf){
+      switch(tf){
+        case 'day': return 1;
+        case 'week': return 7;
+        case 'month': return 30;
+        case 'year': return 365;
+        default: return 30;
+      }
+    }
+    function tfLabel(tf){
+      return tf === 'day' ? 'day' : tf === 'week' ? 'week' : tf === 'year' ? 'year' : 'month';
+    }
+
+    // ===== Calculations =====
+    function dailyKwh(item){ return (item.watts * item.hoursPerDay * item.qty) / 1000; }
+    function summarize(){
+      const tf = state.timeframe;
+      const factor = timeframeFactor(tf);
+      const byItem = state.items.map(it => ({...it, kwhDay: dailyKwh(it)}));
+      const totalDay = byItem.reduce((a,b)=>a+b.kwhDay,0);
+      const periodKwh = totalDay * factor;
+      const cost = periodKwh * COST_RATE;
+
+      const top = byItem.length ? byItem.reduce((a,b)=> a.kwhDay > b.kwhDay ? a : b) : null;
+
+      const byCat = {};
+      byItem.forEach(r => { byCat[r.category] = (byCat[r.category]||0) + r.kwhDay; });
+
+      return { tf, factor, totalDay, periodKwh, cost, byItem, byCat, top };
+    }
+
+    // ===== History (simple daily snapshot to enable spike text) =====
+    function logToday(){
+      const today = new Date().toISOString().slice(0,10);
+      const last = state.history[state.history.length-1];
+      const s = summarize();
+      if(!last || last.date !== today){
+        state.history.push({date: today, kwh: s.totalDay});
+        if(state.history.length > 365) state.history = state.history.slice(-365);
+        save();
+      }else{
+        last.kwh = s.totalDay; save();
+      }
+    }
+    function detectPeakWarning(){
+      if (state.history.length < 8) return '';
+      const last7 = state.history.slice(-8, -1).map(d => d.kwh);
+      const avg = last7.reduce((a,b)=>a+b,0)/last7.length;
+      const today = state.history[state.history.length-1].kwh;
+      if (today > avg*1.35) return `⚠ Peak usage spike: today ${(today-avg).toFixed(2)} kWh above 7‑day avg.`;
+      return '✔ No unusual spikes detected.';
+    }
+    function predictNextMonthCost(){
+      if (!state.history.length) {
+        const s = summarize(); // fallback simple estimate from current usage
+        return (s.totalDay * 30 * COST_RATE);
+      }
+      const last = state.history.slice(-30);
+      const avg = last.reduce((a,b)=>a+b.kwh,0) / last.length;
+      return avg * 30 * COST_RATE;
+    }
+
+    // ===== DOM refs =====
+    const tbody = document.getElementById('tbody');
+    const sumKwh = document.getElementById('sumKwh');
+    const sumCost = document.getElementById('sumCost');
+    const topConsumer = document.getElementById('topConsumer');
+    const tfLabelEl = document.getElementById('tfLabel');
+    const insightsDiv = document.getElementById('insights');
+    const insightsBottom = document.getElementById('insightsBottom');
+
+    // ===== Table render =====
+    function renderTable(filter=''){
+      const q = filter.trim().toLowerCase();
+      tbody.innerHTML = '';
+      state.items
+        .filter(it => !q || it.name.toLowerCase().includes(q) || it.category.toLowerCase().includes(q))
+        .forEach(it => {
+          const tagClass = it.category ? it.category.toLowerCase() : 'other';
+          const kwh = dailyKwh(it);
+          tbody.insertAdjacentHTML('beforeend', `
+            <tr>
+              <td>${it.name}</td>
+              <td><span class="tag ${tagClass}">${it.category}</span></td>
+              <td>${it.watts}</td>
+              <td>${it.hoursPerDay}</td>
+              <td>${it.qty}</td>
+              <td>${kwh.toFixed(3)}</td>
+              <td>
+                <button class="btn ghost" onclick="editItem('${it.id}')">Edit</button>
+                <button class="btn warn" onclick="removeItem('${it.id}')">Delete</button>
+              </td>
+            </tr>
+          `);
+        });
+    }
+
+    // ===== Charts =====
+    let mainChart, pieChart;
+    function renderCharts(){
+      const s = summarize();
+      const typeSel = document.getElementById('chartType').value;
+
+      // Main chart (Pie/Bar/Stacked)
+      const ctxMain = document.getElementById('mainChart').getContext('2d');
+      if (mainChart) mainChart.destroy();
+
+      if (typeSel === 'stacked') {
+        // Stacked Bar by Category
+        const labels = Object.keys(s.byCat);
+        const data = Object.values(s.byCat).map(v => v * timeframeFactor('day')); // daily base
+        const colors = labels.map(c => CATEGORY_COLORS[c] || '#9aa3b2');
+        mainChart = new Chart(ctxMain, {
+          type: 'bar',
+          data: { labels, datasets: [{ label: 'Daily kWh', data, backgroundColor: colors }] },
+          options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ x:{ stacked:true }, y:{ stacked:true, beginAtZero:true } } }
+        });
+      } else if (typeSel === 'bar') {
+        const labels = s.byItem.map(i => i.name);
+        const data = s.byItem.map(i => i.kwhDay * timeframeFactor('day'));
+        const colors = s.byItem.map(i => CATEGORY_COLORS[i.category] || '#9aa3b2');
+        mainChart = new Chart(ctxMain, {
+          type: 'bar',
+          data: { labels, datasets: [{ label:'Daily kWh', data, backgroundColor: colors }] },
+          options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
+        });
+      } else {
+        // pie
+        const labels = s.byItem.map(i => i.name);
+        const data = s.byItem.map(i => i.kwhDay * timeframeFactor('day'));
+        const colors = s.byItem.map(i => CATEGORY_COLORS[i.category] || '#9aa3b2');
+        mainChart = new Chart(ctxMain, {
+          type: 'pie',
+          data: { labels, datasets: [{ data, backgroundColor: colors }] },
+          options: { responsive:true }
+        });
+      }
+
+      // Category share pie (right)
+      const ctxPie = document.getElementById('pieChart').getContext('2d');
+      if (pieChart) pieChart.destroy();
+      const catLabels = Object.keys(s.byCat);
+      const catData = Object.values(s.byCat);
+      const catColors = catLabels.map(c => CATEGORY_COLORS[c] || '#9aa3b2');
+      pieChart = new Chart(ctxPie, {
+        type: 'pie',
+        data: { labels: catLabels, datasets: [{ data: catData, backgroundColor: catColors }] },
+        options: { responsive:true }
+      });
+    }
+
+    // ===== Summary + Insights =====
+    function renderSummary(){
+      const s = summarize();
+      sumKwh.textContent = (s.periodKwh).toFixed(2);
+      sumCost.textContent = (s.cost).toFixed(2);
+      tfLabelEl.textContent = tfLabel(s.tf);
+      document.querySelectorAll('.tf').forEach(n => n.textContent = tfLabel(s.tf));
+      topConsumer.textContent = s.top ? `${s.top.name} (${s.top.kwhDay.toFixed(2)} kWh/day)` : '—';
+
+      // Inline insights (top of section)
+      const breakdown = categoryBreakdownText();
+      insightsDiv.innerHTML = `
+        <p>${detectPeakWarning()||'✔ No unusual spikes detected.'}</p>
+        <p>Next month bill estimate: <b>${predictNextMonthCost().toFixed(2)} PKR</b> (simple average model)</p>
+        <p>Category breakdown: ${breakdown}</p>
+      `;
+
+      renderCharts();
+      renderBottomInsights();
+    }
+
+    function categoryBreakdownText(){
+      const { byCat } = summarize();
+      const total = Object.values(byCat).reduce((a,b)=>a+b,0) || 1;
+      return Object.entries(byCat).map(([k,v]) => `${k} ${(v*100/total).toFixed(1)}%`).join(' • ');
+    }
+
+    function renderBottomInsights(){
+  const s = summarize();
+
+  // Get top 2 consumers
+  const topItems = [...s.byItem]
+    .sort((a,b) => b.kwhDay - a.kwhDay)
+    .slice(0, 2);
+
+  // Generate generic suggestions
+  const suggestions = topItems.map(it => 
+    `Consider reducing ${it.name} usage to cut costs`
+  ).join(' • ');
+
+  // Carbon footprint (dynamic)
+  const co2 = (s.periodKwh * 0.233).toFixed(1); // 0.233 kg CO₂ per kWh
+
+  // Format top consumers dynamically
+  const topList = topItems.map(it => 
+    `${it.name} – ${(it.kwhDay * s.factor * COST_RATE).toFixed(0)} PKR/mo`
+  ).join(' • ');
+
+  insightsBottom.innerHTML = `
+    <div><strong>📄 Personalized Energy Report</strong></div>
+    <div>Your energy use shows most costs come from a few appliances.</div>
+    <div>💡 <strong>Suggestions:</strong> ${suggestions}</div>
+    <div>🌍 <strong>Carbon Footprint:</strong> ${co2} kg CO₂/${tfLabel(s.tf)} (~${Math.round(co2/0.245)} km driving)</div>
+    <div>📊 <strong>Top Consumers:</strong> ${topList}</div>
+  `;
+}
+
+    // ===== CRUD =====
+    function addItem(payload){
+      const it = { id: uid(), ...payload };
+      state.items.push(it);
+      save(); renderAll();
+    }
+    function editItem(id){
+      const it = state.items.find(x => x.id === id);
+      if(!it) return;
+      const name = prompt('Name', it.name); if (!name) return;
+      const watts = parseFloat(prompt('Power (W)', it.watts)); if (isNaN(watts)) return;
+      const hours = parseFloat(prompt('Hours/day', it.hoursPerDay)); if (isNaN(hours)) return;
+      const qty = parseInt(prompt('Quantity', it.qty)); if (isNaN(qty)) return;
+      const category = prompt('Category', it.category || 'Other') || 'Other';
+      Object.assign(it, { name, watts, hoursPerDay: hours, qty, category });
+      save(); renderAll();
+    }
+    function removeItem(id){
+      state.items = state.items.filter(x => x.id !== id);
+      save(); renderAll();
+    }
+
+    // make edit/remove available globally for inline onclick
+    window.editItem = editItem;
+    window.removeItem = removeItem;
+
+    // ===== Import/Export =====
+    function itemsToCSV(){
+      const headers = ['Name','Category','Power (W)','Hours/Day','Qty'];
+      const rows = state.items.map(it => [it.name, it.category, it.watts, it.hoursPerDay, it.qty]);
+      const meta = [`Timeframe: ${state.timeframe}`, `Rate (PKR/kWh): ${COST_RATE}`, `Exported: ${new Date().toLocaleString()}`].join(',');
+      return [meta, headers.join(','), ...rows.map(r=>r.join(','))].join('\n');
+    }
+    function download(filename, text){
+      const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    }
+    function exportCSV(){
+      const name = `Energy_Data_${state.timeframe}_${Date.now()}.csv`;
+      download(name, itemsToCSV());
+    }
+    function csvToItems(text){
+      // Accepts with or without meta row. Expects a header row with at least Name,Category,Power (W),Hours/Day,Qty
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      // find header index
+      const headerIndex = lines.findIndex(l => /name\s*,/i.test(l));
+      if (headerIndex === -1) return [];
+      const dataLines = lines.slice(headerIndex+1);
+      return dataLines.map(line => {
+        const [name, category, w, h, q] = line.split(',');
+        return {
+          id: uid(),
+          name: (name||'').trim() || 'Unnamed',
+          category: (category||'Other').trim() || 'Other',
+          watts: parseFloat(w)||0,
+          hoursPerDay: parseFloat(h)||0,
+          qty: parseInt(q)||1
+        };
+      }).filter(x => x.name);
+    }
+    async function importCSV(overwrite=false){
+      const f = document.getElementById('csvFile').files[0];
+      if(!f) return alert('Choose a CSV file first.');
+      const text = await f.text();
+      const items = csvToItems(text);
+      if (!items.length) return alert('No valid rows found. Make sure headers are: Name, Category, Power (W), Hours/Day, Qty');
+      if (overwrite) state.items = items;
+      else state.items = state.items.concat(items);
+      save(); renderAll();
+    }
+
+    async function exportPDF(){
+      const { jsPDF } = window.jspdf; const pdf = new jsPDF({ unit:'pt', format:'a4' });
+      const margin = 40; let y = margin;
+      pdf.setFontSize(16); pdf.text('Energy Consumption Report', margin, y); y += 22;
+
+      const s = summarize();
+      pdf.setFontSize(11);
+      pdf.text(`Timeframe: ${tfLabel(s.tf)}`, margin, y); y += 14;
+      pdf.text(`Total Energy: ${s.periodKwh.toFixed(2)} kWh/${tfLabel(s.tf)}`, margin, y); y += 14;
+      pdf.text(`Estimated Cost: ${s.cost.toFixed(2)} PKR/${tfLabel(s.tf)}`, margin, y); y += 14;
+      pdf.text(`Top Consumer: ${s.top ? s.top.name + ' (' + s.top.kwhDay.toFixed(2) + ' kWh/day)' : '—'}`, margin, y); y += 20;
+
+      // Table
+      const head = [['Name','Category','Power (W)','Hours/Day','Qty','Daily kWh']];
+      const body = s.byItem.map(it => [it.name, it.category, it.watts.toFixed(0), it.hoursPerDay, it.qty, it.kwhDay.toFixed(3)]);
+      pdf.autoTable({ head, body, startY: y, margin: { left: margin, right: margin }, styles:{ fontSize:10, cellPadding:4 } });
+
+      // Charts page
+      // pdf.addPage();
+      // pdf.setFontSize(14); pdf.text('Charts', margin, margin);
+      // grab canvases
+      // const mainImg = document.getElementById('mainChart').toDataURL('image/png', 1.0);
+      // const pieImg  = document.getElementById('pieChart').toDataURL('image/png', 1.0);
+      // pdf.addImage(mainImg, 'PNG', margin, margin+10, 515, 220);
+      // pdf.addImage(pieImg,  'PNG', margin, margin+240, 260, 220);
+
+      pdf.save(`Energy_Report_${state.timeframe}}.pdf`);
+    }
+
+    // ===== Event Bindings =====
+    document.getElementById('btnAdd').addEventListener('click', () => {
+      const name = document.getElementById('inpName').value.trim();
+      const watts = parseFloat(document.getElementById('inpWatt').value);
+      const hours = parseFloat(document.getElementById('inpHours').value);
+      const qty = parseInt(document.getElementById('inpQty').value);
+      const category = document.getElementById('categorySelect').value;
+      if (!name || isNaN(watts) || isNaN(hours) || isNaN(qty) || qty<=0) return alert('Enter valid name, watts, hours/day and qty.');
+      addItem({ name, category, watts, hoursPerDay: hours, qty });
+      // reset fields
+      document.getElementById('inpName').value='';
+      document.getElementById('inpWatt').value='';
+      document.getElementById('inpHours').value='';
+      document.getElementById('inpQty').value='';
+    });
+
+    document.getElementById('chartType').addEventListener('change', renderCharts);
+
+    document.getElementById('btnImportOverwrite').addEventListener('click', () => importCSV(true));
+    document.getElementById('btnImportAppend').addEventListener('click', () => importCSV(false));
+    document.getElementById('btnExportCSV').addEventListener('click', exportCSV);
+    document.getElementById('btnExportPDF').addEventListener('click', exportPDF);
+
+    document.getElementById('themeSelect').addEventListener('change', e => {
+      state.theme = e.target.value; document.body.setAttribute('data-theme', state.theme); save(); renderCharts();
+    });
+
+    document.getElementById('resetAll').addEventListener('click', () => {
+      if(!confirm('Clear all data?')) return;
+      localStorage.removeItem(LS_KEY);
+      location.reload();
+    });
+
+    // Timeframe buttons
+    document.getElementById('tfButtons').addEventListener('click', (e) => {
+      const btn = e.target.closest('.tf-btn'); if(!btn) return;
+      document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.timeframe = btn.dataset.tf;
+      save(); renderSummary();
+    });
+
+    // ===== Bootstrap =====
+    function renderAll(){
+      renderTable('');
+      renderSummary();
+      logToday();
+    }
+
+    function init(){
+      load();
+      // hydrate theme
+      document.getElementById('themeSelect').value = state.theme || 'dark';
+      document.body.setAttribute('data-theme', state.theme || 'dark');
+
+      // default timeframe button active
+      document.querySelectorAll('.tf-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tf === (state.timeframe || 'month'));
+      });
+
+      renderAll();
+    }
+
+    init();
+  </script>
+</body>
+</html>
