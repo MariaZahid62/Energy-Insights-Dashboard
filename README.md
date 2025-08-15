@@ -14,7 +14,7 @@
 - Promotes energy efficiency and cost savings in homes, offices, and institutions.  
 
 ## Technical Stack
-- Built with **HTML5**, **CSS3**, and modern **JavaScript (ES6)** for responsive UI.  
+- Built with **HTML**, **CSS**, and modern **JavaScript** for responsive UI.  
 - **Chart.js** used for interactive, dynamic data visualization.  
 - **jsPDF** + **autoTable plugin** for generating PDF reports directly in the browser.  
 - 100% client-side logic for fast performance without server dependency.  
